@@ -1,0 +1,21 @@
+{
+    "name": "github-utils",
+    "version": "1.0.0",
+    "description": "Utilities for working with GitHub",
+    "author": {
+        "name": "Alwin Garside",
+        "email": "alwin@garsi.de",
+        "url": "https://alwin.garsi.de"
+    },
+    "repository": "https://github.com/AlwinGarside/coding-agent-plugins",
+    "license": "MIT",
+    "interface": {
+        "displayName": "GitHub Utils",
+        "shortDescription": "Utilities for working with GitHub",
+        "longDescription": "Utilities for working with GitHub",
+        "developerName": "Alwin Garside",
+        "category": "productivity",
+        "capabilities": ["Read", "Write"],
+        "defaultPrompt": []
+    }
+}

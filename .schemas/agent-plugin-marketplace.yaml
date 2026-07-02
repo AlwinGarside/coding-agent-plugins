@@ -1,0 +1,87 @@
+$schema: 'http://json-schema.org/draft-04/schema#'
+
+type: 'object'
+properties:
+  name: { type: 'string' }
+  interface:
+    type: 'object'
+    properties:
+      displayName:
+        description:
+          Display name of the marketplace
+        type: 'string'
+  plugins:
+    description:
+      Collection of available plugins in this marketplace
+    type: 'array'
+    items:
+      type: 'object'
+      properties:
+        name:
+          description:
+            Unique identifier matching the plugin name
+          type: 'string'
+        source:
+          type: 'object'
+          anyOf:
+            - description: >-
+                Plugin located in the local repository.
+              type: 'object'
+              properties:
+                source:
+                  type: 'string'
+                  const: 'local'
+                path:
+                  description: >-
+                    Subdirectory within the repo containing the plugin (e.g., "tools/claude-plugin").
+                  type: 'string'
+                  minLength: 1
+              additionalProperties: false
+              required: [source, path]
+            - type: 'object'
+              properties:
+                source:
+                  type: 'string'
+                  const: 'url'
+                url:
+                  description:
+                    Full git repository URL (https:// or git@)
+                  type: 'string'
+                ref:
+                  description: >-
+                    Git branch or tag to use (e.g., "main", "v1.0.0"). Defaults to repository default branch.
+                  type: 'string'
+              additionalProperties: false
+              required: [source, url]
+            - description: >-
+                Plugin located in a subdirectory of a larger repository (monorepo).
+                Only the specified subdirectory is materialized; the rest of the repo is not downloaded.
+              type: 'object'
+              properties:
+                source:
+                  type: 'string'
+                  const: 'git-subdir'
+                url:
+                  description: >-
+                    Git repository: GitHub owner/repo shorthand, https://, or git@ URL
+                  type: 'string'
+                path:
+                  description: >-
+                    Subdirectory within the repo containing the plugin (e.g., "tools/claude-plugin").
+                    Cloned sparsely using partial clone (--filter=tree:0) to minimize bandwidth for monorepos.
+                  type: 'string'
+                  minLength: 1
+                ref:
+                  description:
+                    Git branch or tag to use (e.g., "main", "v1.0.0"). Defaults to repository default branch.
+                  type: 'string'
+              additionalProperties: false
+              required: [ source, url, path ]
+        policy:
+          type: 'object'
+          properties:
+            installation:   { type: 'string' }
+            authentication: { type: 'string' }
+        category:
+          type: 'string'
+      additionalProperties: false

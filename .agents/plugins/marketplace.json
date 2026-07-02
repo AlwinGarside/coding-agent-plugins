@@ -1,0 +1,20 @@
+{
+  "name": "alwin-garside",
+  "interface": {
+    "displayName": "Alwin Garside's Plugins"
+  },
+  "plugins": [
+    {
+      "name": "github-utils",
+      "source": {
+        "source": "local",
+        "path": "./plugins/github-utils"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
