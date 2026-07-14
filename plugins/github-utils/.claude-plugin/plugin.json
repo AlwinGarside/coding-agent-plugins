@@ -3,7 +3,7 @@
 
   "name": "github-utils",
   "description": "Utilities for working with GitHub",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "Alwin Garside",
     "email": "alwin@garsi.de",
@@ -12,5 +12,5 @@
   "displayName": "GitHub Utils",
   "homepage": "https://github.com/AlwinGarside/coding-agent-plugins/blob/main/plugins/github-utils/",
   "repository": "https://github.com/AlwinGarside/coding-agent-plugins",
-  "license": "UNLICENSED"
+  "license": "MIT"
 }

@@ -9,14 +9,13 @@
   },
   "metadata": {
     "description": "Some useful plugins",
-    "version": "1.0.0"
+    "version": "1.0.1"
   },
   "plugins": [
     {
       "name": "github-utils",
       "source": "./plugins/github-utils",
       "description": "Utilities for working with GitHub",
-      "version": "1.0.0",
       "author": {
         "name": "Alwin Garside",
         "email": "alwin@garsi.de",
