@@ -14,6 +14,121 @@ readonly EXIT_NEEDS_REVIEW=2
 readonly EXIT_TIMEOUT=3
 readonly EXIT_API_FAILURE=4
 
+#######################################
+# Main function.
+# Arguments:
+#   None
+#######################################
+main() {
+  local pr_json
+  local owner
+  local repo
+  local number
+  local head_ref_oid
+  local state_json
+  local feedback_json
+  local feedback_count
+  local is_stale
+  local has_generated_no_new_comments_marker
+
+  require_command 'gh'
+  require_command 'jq'
+
+  if pr_json=$(get_pr_metadata); then
+    :
+  else
+    exit "$?"
+  fi
+
+  if owner=$(jq -r '.owner' <<< "${pr_json}"); then
+    :
+  else
+    fail_api 'Failed to parse pull request owner.'
+  fi
+
+  if repo=$(jq -r '.repo' <<< "${pr_json}"); then
+    :
+  else
+    fail_api 'Failed to parse pull request repository.'
+  fi
+
+  if number=$(jq -r '.number' <<< "${pr_json}"); then
+    :
+  else
+    fail_api 'Failed to parse pull request number.'
+  fi
+
+  if head_ref_oid=$(jq -r '.headRefOid' <<< "${pr_json}"); then
+    :
+  else
+    fail_api 'Failed to parse pull request head commit.'
+  fi
+
+  if [[ -z "${owner}" || -z "${repo}" || -z "${number}" || -z "${head_ref_oid}" ]]; then
+    fail_api 'Pull request metadata is incomplete.'
+  fi
+
+  if state_json=$(wait_for_copilot_state "${owner}" "${repo}" "${number}" "${head_ref_oid}"); then
+    :
+  else
+    exit "$?"
+  fi
+
+  if feedback_json=$(build_unresolved_copilot_feedback "${owner}" "${repo}" "${number}"); then
+    :
+  else
+    exit "$?"
+  fi
+
+  if feedback_count=$(jq 'length' <<< "${feedback_json}"); then
+    :
+  else
+    fail_api 'Failed to count unresolved Copilot feedback.'
+  fi
+
+  if is_stale=$(jq -r '.isStale' <<< "${state_json}"); then
+    :
+  else
+    fail_api 'Failed to parse Copilot review staleness.'
+  fi
+
+  if has_generated_no_new_comments_marker=$(jq -r '.hasGeneratedNoNewCommentsMarker' <<< "${state_json}"); then
+    :
+  else
+    fail_api 'Failed to parse latest Copilot review summary.'
+  fi
+
+  if (( feedback_count > 0 )); then
+    jq '.' <<< "${feedback_json}"
+
+    if [[ "${is_stale}" == 'true' ]]; then
+      log 'Latest Copilot review is stale; request a new Copilot review.'
+      exit "${EXIT_NEEDS_REVIEW}"
+    fi
+
+    exit "${EXIT_HAS_FEEDBACK}"
+  fi
+
+  if [[ "${is_stale}" == 'true' ]]; then
+    log 'Latest Copilot review is stale; request a new Copilot review.'
+    exit "${EXIT_NEEDS_REVIEW}"
+  fi
+
+  if [[ "${has_generated_no_new_comments_marker}" == 'true' ]]; then
+    exit 0
+  fi
+
+  log 'No unresolved Copilot feedback was found, but the latest Copilot review did not report "generated no new comments".'
+  exit "${EXIT_NEEDS_REVIEW}"
+}
+
+#######################################
+# Log a message to stderr.
+# Arguments:
+#   Message to log.
+# Outputs:
+#   Writes message to stderr.
+#######################################
 log() {
   printf '%s\n' "$*" >&2
 }
@@ -58,6 +173,7 @@ fetch_copilot_timeline() {
   local query
   local response
 
+  # shellcheck disable=SC2016
   query='
     query($owner: String!, $repo: String!, $number: Int!, $endCursor: String) {
       repository(owner: $owner, name: $repo) {
@@ -109,10 +225,10 @@ fetch_copilot_timeline() {
   if ! response=$(gh api graphql \
     --paginate \
     --slurp \
-    -F owner="${owner}" \
-    -F repo="${repo}" \
-    -F number="${number}" \
-    -f query="${query}"); then
+    --field owner="${owner}" \
+    --field repo="${repo}" \
+    --field number="${number}" \
+    --raw-field query="${query}"); then
     log 'Failed to fetch Copilot review timeline from GitHub.'
     return "${EXIT_API_FAILURE}"
   fi
@@ -169,7 +285,7 @@ build_copilot_state() {
           ),
           hasGeneratedNoNewCommentsMarker: (
             $latestReview != null
-            and (($latestReview.bodyText // "") | test("generated no new comments"; "i"))
+            and (($latestReview.bodyText // "") | test("generated no comments"; "i") or test("generated no new comments"; "i"))
           )
         }
     ' <<< "${timeline_json}"); then
@@ -187,6 +303,7 @@ fetch_review_threads() {
   local query
   local response
 
+  # shellcheck disable=SC2016
   query='
     query($owner: String!, $repo: String!, $number: Int!, $endCursor: String) {
       repository(owner: $owner, name: $repo) {
@@ -242,10 +359,10 @@ fetch_review_threads() {
   if ! response=$(gh api graphql \
     --paginate \
     --slurp \
-    -F owner="${owner}" \
-    -F repo="${repo}" \
-    -F number="${number}" \
-    -f query="${query}"); then
+    --field owner="${owner}" \
+    --field repo="${repo}" \
+    --field number="${number}" \
+    --raw-field query="${query}"); then
     log 'Failed to fetch pull request review threads from GitHub.'
     return "${EXIT_API_FAILURE}"
   fi
@@ -258,6 +375,7 @@ fetch_thread_comments() {
   local query
   local response
 
+  # shellcheck disable=SC2016
   query='
     query($threadId: ID!, $endCursor: String) {
       node(id: $threadId) {
@@ -293,8 +411,8 @@ fetch_thread_comments() {
   if ! response=$(gh api graphql \
     --paginate \
     --slurp \
-    -F threadId="${thread_id}" \
-    -f query="${query}"); then
+    --field threadId="${thread_id}" \
+    --raw-field query="${query}"); then
     log "Failed to fetch comments for review thread '${thread_id}'."
     return "${EXIT_API_FAILURE}"
   fi
@@ -328,6 +446,8 @@ build_unresolved_copilot_feedback() {
     log 'Failed to parse pull request review threads.'
     return "${EXIT_API_FAILURE}"
   fi
+
+  local thread_json
 
   while IFS= read -r thread_json; do
     if [[ -z "${thread_json}" ]]; then
@@ -487,109 +607,6 @@ wait_for_copilot_state() {
 
     sleep "${POLL_INTERVAL_SECONDS}"
   done
-}
-
-main() {
-  local pr_json
-  local owner
-  local repo
-  local number
-  local head_ref_oid
-  local state_json
-  local feedback_json
-  local feedback_count
-  local is_stale
-  local has_generated_no_new_comments_marker
-
-  require_command 'gh'
-  require_command 'jq'
-
-  if pr_json=$(get_pr_metadata); then
-    :
-  else
-    exit "$?"
-  fi
-
-  if owner=$(jq -r '.owner' <<< "${pr_json}"); then
-    :
-  else
-    fail_api 'Failed to parse pull request owner.'
-  fi
-
-  if repo=$(jq -r '.repo' <<< "${pr_json}"); then
-    :
-  else
-    fail_api 'Failed to parse pull request repository.'
-  fi
-
-  if number=$(jq -r '.number' <<< "${pr_json}"); then
-    :
-  else
-    fail_api 'Failed to parse pull request number.'
-  fi
-
-  if head_ref_oid=$(jq -r '.headRefOid' <<< "${pr_json}"); then
-    :
-  else
-    fail_api 'Failed to parse pull request head commit.'
-  fi
-
-  if [[ -z "${owner}" || -z "${repo}" || -z "${number}" || -z "${head_ref_oid}" ]]; then
-    fail_api 'Pull request metadata is incomplete.'
-  fi
-
-  if state_json=$(wait_for_copilot_state "${owner}" "${repo}" "${number}" "${head_ref_oid}"); then
-    :
-  else
-    exit "$?"
-  fi
-
-  if feedback_json=$(build_unresolved_copilot_feedback "${owner}" "${repo}" "${number}"); then
-    :
-  else
-    exit "$?"
-  fi
-
-  if feedback_count=$(jq 'length' <<< "${feedback_json}"); then
-    :
-  else
-    fail_api 'Failed to count unresolved Copilot feedback.'
-  fi
-
-  if is_stale=$(jq -r '.isStale' <<< "${state_json}"); then
-    :
-  else
-    fail_api 'Failed to parse Copilot review staleness.'
-  fi
-
-  if has_generated_no_new_comments_marker=$(jq -r '.hasGeneratedNoNewCommentsMarker' <<< "${state_json}"); then
-    :
-  else
-    fail_api 'Failed to parse latest Copilot review summary.'
-  fi
-
-  if (( feedback_count > 0 )); then
-    jq '.' <<< "${feedback_json}"
-
-    if [[ "${is_stale}" == 'true' ]]; then
-      log 'Latest Copilot review is stale; request a new Copilot review.'
-      exit "${EXIT_NEEDS_REVIEW}"
-    fi
-
-    exit "${EXIT_HAS_FEEDBACK}"
-  fi
-
-  if [[ "${is_stale}" == 'true' ]]; then
-    log 'Latest Copilot review is stale; request a new Copilot review.'
-    exit "${EXIT_NEEDS_REVIEW}"
-  fi
-
-  if [[ "${has_generated_no_new_comments_marker}" == 'true' ]]; then
-    exit 0
-  fi
-
-  log 'No unresolved Copilot feedback was found, but the latest Copilot review did not report "generated no new comments".'
-  exit "${EXIT_NEEDS_REVIEW}"
 }
 
 main "$@"

@@ -10,6 +10,129 @@ readonly EXIT_FAILED_CHECKS=1
 readonly EXIT_TIMEOUT=3
 readonly EXIT_API_FAILURE=4
 
+#######################################
+# Main function.
+# Arguments:
+#   None
+#######################################
+main() {
+  local started_at
+  local checks_json
+  local all_checks_json
+  local current_checks_snapshot
+  local failed_checks_json
+  local failed_count
+  local required_check_count
+  local previous_checks_snapshot='{}'
+  local stable_success_started_at=''
+  local has_logged_waiting='false'
+  local has_logged_stable_success='false'
+
+  require_command 'gh'
+  require_command 'jq'
+
+  started_at=$(date +%s)
+
+  while true; do
+    if checks_json=$(fetch_checks 'true'); then
+      :
+    else
+      exit "$?"
+    fi
+
+    if required_check_count=$(jq 'length' <<< "${checks_json}"); then
+      :
+    else
+      fail_api 'Failed to count required pull request checks.'
+    fi
+
+    if (( required_check_count == 0 )); then
+      log 'No required pull request checks are configured; nothing to see here.'
+      exit 0
+    fi
+
+    if all_checks_json=$(fetch_checks 'false'); then
+      :
+    else
+      exit "$?"
+    fi
+
+    if current_checks_snapshot=$(build_check_status_snapshot "${all_checks_json}"); then
+      :
+    else
+      fail_api 'Failed to build pull request check status snapshot.'
+    fi
+
+    if log_check_status_changes "${previous_checks_snapshot}" "${current_checks_snapshot}"; then
+      previous_checks_snapshot="${current_checks_snapshot}"
+    else
+      fail_api 'Failed to log pull request check status changes.'
+    fi
+
+    if failed_checks_json=$(select_failed_checks "${checks_json}"); then
+      :
+    else
+      fail_api 'Failed to parse pull request check results.'
+    fi
+
+    if failed_count=$(jq 'length' <<< "${failed_checks_json}"); then
+      :
+    else
+      fail_api 'Failed to count failed pull request checks.'
+    fi
+
+    if (( failed_count > 0 )); then
+      jq '.' <<< "${failed_checks_json}"
+      exit "${EXIT_FAILED_CHECKS}"
+    fi
+
+    if ! has_pending_checks "${checks_json}"; then
+      if [[ -z "${stable_success_started_at}" ]]; then
+        stable_success_started_at=$(date +%s)
+      fi
+
+      if (( $(date +%s) - stable_success_started_at >= STABLE_SUCCESS_SECONDS )); then
+        exit 0
+      fi
+
+      if [[ "${has_logged_stable_success}" != 'true' ]]; then
+        log "Required pull request checks are passing; waiting $STABLE_SUCCESS_SECONDS seconds to ensure no late checks appear."
+        has_logged_stable_success='true'
+      fi
+
+      if (( $(date +%s) - started_at >= POLL_TIMEOUT_SECONDS )); then
+        log 'Timed out while waiting for required pull request checks.'
+        exit "${EXIT_TIMEOUT}"
+      fi
+
+      sleep "${POLL_INTERVAL_SECONDS}"
+      continue
+    else
+      stable_success_started_at=''
+      has_logged_stable_success='false'
+    fi
+
+    if (( $(date +%s) - started_at >= POLL_TIMEOUT_SECONDS )); then
+      log 'Timed out while waiting for required pull request checks.'
+      exit "${EXIT_TIMEOUT}"
+    fi
+
+    if [[ "${has_logged_waiting}" != 'true' ]]; then
+      log "Required pull request checks are still running; waiting for those to finish, or for $POLL_TIMEOUT_SECONDS seconds to pass — whichever happens sooner."
+      has_logged_waiting='true'
+    fi
+
+    sleep "${POLL_INTERVAL_SECONDS}"
+  done
+}
+
+#######################################
+# Log a message to stderr.
+# Arguments:
+#   Message to log.
+# Outputs:
+#   Writes message to stderr.
+#######################################
 log() {
   printf '%s\n' "$*" >&2
 }
@@ -146,117 +269,6 @@ log_check_status_changes() {
           "Check status changed: \($label) (\($old.bucket)/\($old.state) -> \($check.bucket)/\($check.state))."
         end
     ' <<< "${current_snapshot}" >&2
-}
-
-main() {
-  local started_at
-  local checks_json
-  local all_checks_json
-  local current_checks_snapshot
-  local failed_checks_json
-  local failed_count
-  local required_check_count
-  local previous_checks_snapshot='{}'
-  local stable_success_started_at=''
-  local has_logged_waiting='false'
-  local has_logged_stable_success='false'
-
-  require_command 'gh'
-  require_command 'jq'
-
-  started_at=$(date +%s)
-
-  while true; do
-    if checks_json=$(fetch_checks 'true'); then
-      :
-    else
-      exit "$?"
-    fi
-
-    if required_check_count=$(jq 'length' <<< "${checks_json}"); then
-      :
-    else
-      fail_api 'Failed to count required pull request checks.'
-    fi
-
-    if (( required_check_count == 0 )); then
-      log 'No required pull request checks are configured; continuing.'
-      exit 0
-    fi
-
-    if all_checks_json=$(fetch_checks 'false'); then
-      :
-    else
-      exit "$?"
-    fi
-
-    if current_checks_snapshot=$(build_check_status_snapshot "${all_checks_json}"); then
-      :
-    else
-      fail_api 'Failed to build pull request check status snapshot.'
-    fi
-
-    if log_check_status_changes "${previous_checks_snapshot}" "${current_checks_snapshot}"; then
-      previous_checks_snapshot="${current_checks_snapshot}"
-    else
-      fail_api 'Failed to log pull request check status changes.'
-    fi
-
-    if failed_checks_json=$(select_failed_checks "${checks_json}"); then
-      :
-    else
-      fail_api 'Failed to parse pull request check results.'
-    fi
-
-    if failed_count=$(jq 'length' <<< "${failed_checks_json}"); then
-      :
-    else
-      fail_api 'Failed to count failed pull request checks.'
-    fi
-
-    if (( failed_count > 0 )); then
-      jq '.' <<< "${failed_checks_json}"
-      exit "${EXIT_FAILED_CHECKS}"
-    fi
-
-    if ! has_pending_checks "${checks_json}"; then
-      if [[ -z "${stable_success_started_at}" ]]; then
-        stable_success_started_at=$(date +%s)
-      fi
-
-      if (( $(date +%s) - stable_success_started_at >= STABLE_SUCCESS_SECONDS )); then
-        exit 0
-      fi
-
-      if [[ "${has_logged_stable_success}" != 'true' ]]; then
-        log "Required pull request checks are passing; waiting $STABLE_SUCCESS_SECONDS seconds to ensure no late checks appear."
-        has_logged_stable_success='true'
-      fi
-
-      if (( $(date +%s) - started_at >= POLL_TIMEOUT_SECONDS )); then
-        log 'Timed out while waiting for required pull request checks.'
-        exit "${EXIT_TIMEOUT}"
-      fi
-
-      sleep "${POLL_INTERVAL_SECONDS}"
-      continue
-    else
-      stable_success_started_at=''
-      has_logged_stable_success='false'
-    fi
-
-    if (( $(date +%s) - started_at >= POLL_TIMEOUT_SECONDS )); then
-      log 'Timed out while waiting for required pull request checks.'
-      exit "${EXIT_TIMEOUT}"
-    fi
-
-    if [[ "${has_logged_waiting}" != 'true' ]]; then
-      log "Required pull request checks are still running; waiting for those to finish, or for $POLL_TIMEOUT_SECONDS seconds to pass — whichever happens sooner."
-      has_logged_waiting='true'
-    fi
-
-    sleep "${POLL_INTERVAL_SECONDS}"
-  done
 }
 
 main "$@"

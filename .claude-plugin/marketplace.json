@@ -1,15 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
 
-  "name": "alwin-garside",
+  "name": "alwingarside",
   "owner": {
     "name": "Alwin Garside",
     "email": "alwin@garsi.de",
     "url": "https://alwin.garsi.de"
   },
   "metadata": {
-    "description": "Some useful plugins",
-    "version": "1.0.1"
+    "description": "Alwin Garside",
+    "version": "1.0.0"
   },
   "plugins": [
     {
@@ -21,7 +21,7 @@
         "email": "alwin@garsi.de",
         "url": "https://alwin.garsi.de"
       },
-      "category": "Productivity"
+      "category": "productivity"
     }
   ]
 }

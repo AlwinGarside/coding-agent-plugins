@@ -1,3 +1,0 @@
-interface:
-  display_name: "Push & Watch"
-  short_description: "Push staged changes and monitor the PR for feedback from `@copilot`."

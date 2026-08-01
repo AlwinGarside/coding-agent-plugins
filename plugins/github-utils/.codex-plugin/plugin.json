@@ -1,6 +1,6 @@
 {
     "name": "github-utils",
-    "version": "1.0.1",
+    "version": "1.0.0",
     "description": "Utilities for working with GitHub",
     "author": {
         "name": "Alwin Garside",
@@ -11,10 +11,10 @@
     "license": "MIT",
     "interface": {
         "displayName": "GitHub Utils",
-        "shortDescription": "Utilities for working with GitHub",
+        "shortDescription": "GitHub Utilities",
         "longDescription": "Utilities for working with GitHub",
         "developerName": "Alwin Garside",
-        "category": "productivity",
+        "category": "Productivity",
         "capabilities": ["Read", "Write"],
         "defaultPrompt": []
     }

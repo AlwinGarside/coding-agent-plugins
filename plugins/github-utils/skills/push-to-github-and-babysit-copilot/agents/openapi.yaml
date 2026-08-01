@@ -1,0 +1,3 @@
+interface:
+  display_name: "Push to GitHub and babysit @copilot"
+  short_description: "Push changes to a GitHub repo, ensure a PR exists and monitor it for feedback from @copilot."

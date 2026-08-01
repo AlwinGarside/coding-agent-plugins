@@ -1,7 +1,7 @@
 {
-  "name": "alwin-garside",
+  "name": "alwingarside",
   "interface": {
-    "displayName": "Alwin Garside's Plugins"
+    "displayName": "Alwin Garside"
   },
   "plugins": [
     {
