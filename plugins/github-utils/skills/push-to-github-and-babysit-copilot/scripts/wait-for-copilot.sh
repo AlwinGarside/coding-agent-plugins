@@ -392,7 +392,6 @@ fetch_thread_comments() {
               path
               line
               originalLine
-              diffHunk
               pullRequestReview {
                 id
               }
@@ -521,7 +520,6 @@ build_unresolved_copilot_feedback() {
                 path,
                 line,
                 originalLine,
-                diffHunk,
                 reviewId: (.pullRequestReview.id // null)
               }
           ]
