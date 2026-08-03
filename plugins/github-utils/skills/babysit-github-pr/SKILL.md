@@ -28,7 +28,7 @@ These paths are relative from the skill directory root, as per the Agent Skills 
    - If no PR exists, create a draft PR.
    - Run `scripts/wait-for-pr-checks.sh`. While waiting for it to finish, don't report if there is no status change.
      - Exit `0`: continue to ‘3. Check for feedback’.
-     - Exit `1`: stdout is a JSON array of failed/cancelled required checks; fix them, then restart from ‘2. Commit your changes’.
+     - Exit `1`: stdout is a JSON array of failed/cancelled required checks; fix them, commit the fix(es), then restart from ‘2. Push and wait for required PR checks’.
      - Exit `3`: timeout. Stop and report the timeout.
      - Exit `4`: GitHub/API/auth failure.
        - Investigate the failure;
@@ -52,14 +52,14 @@ These paths are relative from the skill directory root, as per the Agent Skills 
       - `AGENTS.md` instructions;
       - the feedback thread;
       - the issue lifecycle instructions below.
-   c. The worker subagent must:  
+   c. The worker subagent must:
       - Objectively evaluate each feedback thread. Consider whether it's valid, worthwhile, actionable, and in-scope.
         - Be sceptical of feedback that is fully contrary to the intent of commits.
         - Ignore feedback about style or formatting, especially if the file in question is not dictated to follow any style spec.
       - If the feedback passes evaluation,
         - implement a fix;
         - commit the changes as a separate commit, but do not push yet;
-        - write a custom reply to the thread using `scripts/resolve-comment.sh "<thread id>" "<custom reply>"`.
+        - write a custom reply to the thread using `scripts/resolve-comment.sh "‹thread id›" "‹custom reply›"`.
    d. When all subagents are done, restart from ‘2. Push and wait for required PR checks’.
 
 5. Evaluate
