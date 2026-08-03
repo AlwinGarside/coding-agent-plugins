@@ -335,7 +335,6 @@ fetch_review_threads() {
                   path
                   line
                   originalLine
-                  diffHunk
                   pullRequestReview {
                     id
                   }
