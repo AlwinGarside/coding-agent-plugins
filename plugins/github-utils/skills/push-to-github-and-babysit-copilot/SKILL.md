@@ -50,7 +50,6 @@ These paths are relative from the skill directory root, as per the Agent Skills 
   
 5. Address `@copilot` feedback.
 
-   - Read the full git history for the current branch relative to the base branch to ground yourself. 
    - Objectively evaluate each feedback thread. Consider whether it's valid, worthwhile, actionable, and in-scope.
      - Be sceptical of feedback that is fully contrary to the intent of commits.
      - Ignore feedback about style or formatting, especially if the file in question is not dictated to follow any style spec.
