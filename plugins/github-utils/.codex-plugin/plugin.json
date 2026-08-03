@@ -7,7 +7,7 @@
         "email": "alwin@garsi.de",
         "url": "https://alwin.garsi.de"
     },
-    "repository": "https://github.com/AlwinGarside/coding-agent-plugins",
+    "repository": "https://github.com/AlwinGarside/agent-plugins",
     "license": "MIT",
     "interface": {
         "displayName": "GitHub Utils",

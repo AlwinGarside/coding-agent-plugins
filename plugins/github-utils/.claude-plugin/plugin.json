@@ -10,7 +10,7 @@
     "url": "https://alwin.garsi.de"
   },
   "displayName": "GitHub Utils",
-  "homepage": "https://github.com/AlwinGarside/coding-agent-plugins/blob/main/plugins/github-utils/",
-  "repository": "https://github.com/AlwinGarside/coding-agent-plugins",
+  "homepage": "https://github.com/AlwinGarside/agent-plugins/blob/main/plugins/github-utils/",
+  "repository": "https://github.com/AlwinGarside/agent-plugins",
   "license": "MIT"
 }

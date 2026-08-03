@@ -1,8 +1,31 @@
 # Alwin Garside's Coding Agent Plugins
 
+## Instalation
+
+```bash
+codex plugin marketplace add AlwinGarside/agent-plugins
+```
+
+or
+
+```bash
+claude plugin marketplace add AlwinGarside/agent-plugins
+```
+
 ## Plugins
 
 ### Github Utils
+
+```
+codex plugin add github-utils@AlwinGarside
+```
+
+or
+
+```
+claude plugin install github-utils@AlwinGarside
+```
+
 
 #### [Babysit a GitHub PR](plugins/github-utils/skills/babysit-github-pr/SKILL.md)
 
