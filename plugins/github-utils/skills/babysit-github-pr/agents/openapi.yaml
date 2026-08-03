@@ -1,0 +1,3 @@
+interface:
+  display_name: "Babysit a GitHub PR"
+  short_description: "Monitor a GitHub PR for feedback until it has enough approvals and all outstanding feedback is resolved."
