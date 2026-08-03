@@ -15,47 +15,59 @@ These paths are relative from the skill directory root, as per the Agent Skills 
 
 ## Workflow
 
-1. Check the git status.
+1. Check the git status
 
    - If this is not a GitHub repo, stop and inform the user.
    - If the branch is `main`, stop and suggest creating a task branch.
    - If there is nothing to commit, skip to ‘3. Push and wait for required PR checks’ and continue from there.
    - Identify a JIRA issue from the branch name or task context when possible.
 
-2. Commit staged changes.
+2. Commit staged changes
 
-3. Push and wait for required PR checks.
+3. Push and wait for required PR checks
 
    - Push the current branch.
    - If no PR exists, create a draft PR.
    - Run `scripts/wait-for-pr-checks.sh`. While waiting for it to finish, don't report if there is no status change.
      - Exit `0`: continue to ‘4. Wait for Copilot’.
-     - Exit `1`: stdout is a JSON array of failed/cancelled required checks. Fix them, then restart from ‘2. Commit your changes’.
+     - Exit `1`: stdout is a JSON array of failed/cancelled required checks; fix them, then restart from ‘2. Commit staged changes’.
      - Exit `3`: timeout. Stop and report the timeout.
      - Exit `4`: GitHub/API/auth failure.
        - Investigate the failure,
-       - if a fix is possible, implement a fix for the failure, then restart from ‘2. Commit your changes’,
+       - if a fix is possible, implement a fix for the failure, then restart from ‘2. Commit staged changes’,
        - otherwise, stop and report the failure.
 
-4. Wait for Copilot.
-
+4. Wait for Copilot
+   
    - If the PR is still a draft PR, make it a ready PR.
    - Run `scripts/wait-for-copilot.sh`,
-     - Exit `0`: Copilot approved the code; report completion.
+     - Exit `0`: Copilot approved the code; skip to ‘6. Done’.
+     - Exit `1`: `stdout` is a JSON array of unresolved Copilot review threads; continue to ‘5. Address Copilot feedback’.
      - Exit `2`: request a fresh `@copilot` review with `gh pr edit --add-reviewer '@copilot'`
-       - if stdout was empty, rerun the script,
+       - if `stdout` was empty, rerun the script,
        - otherwise, continue to ‘5. Address Copilot feedback’ and remember that a fresh review was requested
      - Exit `3` or `4`: stop and report timeout or GitHub/API/auth failure.
-     - Exit `1`: stdout is a JSON array of unresolved Copilot review threads
   
-5. Address `@copilot` feedback.
+5. Address Copilot feedback
+   
+   For each feedback thread:
+   
+   a. Start a fresh worker subagent with no inherited conversation turns or previous-thread context.
+   b. Give the fresh subagent only:
+      - `AGENTS.md` instructions;
+      - the feedback thread;
+      - the issue lifecycle instructions below.
+   c. The subagent must:
+      - Objectively evaluate each feedback thread. Consider whether it's valid, worthwhile, actionable, and in-scope.
+        - Be sceptical of feedback that is fully contrary to the intent of commits.
+        - Ignore feedback about style or formatting, especially if the file in question is not dictated to follow any style spec.
+      - If the feedback passes evaluation,
+        - implement a fix;
+        - commit the changes as a separate commit, but do not push yet;
+        - write a custom reply to the thread using `scripts/resolve-comment.sh "‹thread id›" "‹custom reply›"`.
+   d. If the last exit code from `scripts/wait-for-copilot.sh` was `2`, and a fresh review was requested, return to ‘4. Wait for Copilot’,  
+      otherwise, restart from ‘3. Push and wait for required PR checks.’.
 
-   - Objectively evaluate each feedback thread. Consider whether it's valid, worthwhile, actionable, and in-scope.
-     - Be sceptical of feedback that is fully contrary to the intent of commits.
-     - Ignore feedback about style or formatting, especially if the file in question is not dictated to follow any style spec.
-   - Prepare a multi-phase plan to implement the feedback threads that passed evaluation.
-   - For each feedback thread:
-     - Commit the change as a separate commit but do not push yet.
-     - Write a custom reply, run `scripts/resolve-comment.sh "<thread id>" "<custom reply>"`.
-   - If the last exit code from `scripts/wait-for-copilot.sh` was `2`, and a fresh review was requested, return to ‘4. Wait for Copilot’,
-   - otherwise, restart from ‘3. Push and wait for required PR checks.’.
+6. Done
+   
+   Present the user with an overview of the feedback, if any, and how each was addressed.
