@@ -41,30 +41,38 @@ These paths are relative from the skill directory root, as per the Agent Skills 
    
    - If the PR is still a draft PR, make it a ready PR.
    - Run `scripts/wait-for-copilot.sh`,
-     - Exit `0`: Copilot approved the code; skip to ‘6. Done’.
-     - Exit `1`: `stdout` is a JSON array of unresolved Copilot review threads; continue to ‘5. Address Copilot feedback’.
-     - Exit `2`: request a fresh `@copilot` review with `gh pr edit --add-reviewer '@copilot'`
+     - Exit `0`: Copilot review finished without unresolved feedback. `stdout` is the raw review body, if any.  
+       Inspect the review body:
+       - if it contains actionable concerns that the script did not recognize, treat each concern as feedback and continue to ‘5. Address Copilot feedback’;
+       - otherwise, skip to ‘6. Done’.
+     - Exit `1`: `stdout` is a JSON array containing unresolved Copilot review threads and, when present, one `suppressed_review_body` record with the complete review body; continue to ‘5. Address Copilot feedback’.
+     - Exit `2`: the last submitted review is stale or no Copilot review has started. `stdout` uses the same feedback-array format as exit `1`, when feedback exists. Request a fresh `@copilot` review with `gh pr edit --add-reviewer '@copilot'`
        - if `stdout` was empty, rerun the script,
        - otherwise, continue to ‘5. Address Copilot feedback’ and remember that a fresh review was requested
      - Exit `3` or `4`: stop and report timeout or GitHub/API/auth failure.
   
 5. Address Copilot feedback
    
-   For each feedback thread:
+   For each feedback item:
+
+   - A review thread has an `id` and a `comments` array.
+   - A suppressed-review record has `kind: "suppressed_review_body"`.  
+     Extract and evaluate each suppressed comment in its `body` separately. Suppressed comments have no GitHub thread to reply to or resolve.
    
    a. Start a fresh worker subagent with no inherited conversation turns or previous-thread context.
    b. Give the fresh subagent only:
       - `AGENTS.md` instructions;
-      - the feedback thread;
+      - one review thread or one suppressed comment;
       - the issue lifecycle instructions below.
    c. The subagent must:
-      - Objectively evaluate each feedback thread. Consider whether it's valid, worthwhile, actionable, and in-scope.
+      - Objectively evaluate the feedback. Consider whether it's valid, worthwhile, actionable, and in-scope.
         - Be sceptical of feedback that is fully contrary to the intent of commits.
         - Ignore feedback about style or formatting, especially if the file in question is not dictated to follow any style spec.
       - If the feedback passes evaluation,
         - implement a fix;
         - commit the changes as a separate commit, but do not push yet;
-        - write a custom reply to the thread using `scripts/resolve-comment.sh "‹thread id›" "‹custom reply›"`.
+        - for a review thread, write a custom reply and resolve it using `scripts/resolve-comment.sh "‹thread id›" "‹custom reply›"`;
+        - for a suppressed comment, do not call `resolve-comment.sh` because no GitHub thread exists.
    d. If the last exit code from `scripts/wait-for-copilot.sh` was `2`, and a fresh review was requested, return to ‘4. Wait for Copilot’,  
       otherwise, restart from ‘3. Push and wait for required PR checks.’.
 

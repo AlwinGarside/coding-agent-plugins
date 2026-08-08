@@ -27,9 +27,10 @@ main() {
   local head_ref_oid
   local state_json
   local feedback_json
+  local suppressed_feedback_json
   local feedback_count
   local is_stale
-  local has_generated_no_new_comments_marker
+  local latest_review_body
 
   require_command 'gh'
   require_command 'jq'
@@ -80,6 +81,21 @@ main() {
     exit "$?"
   fi
 
+  if suppressed_feedback_json=$(build_suppressed_copilot_feedback "${state_json}"); then
+    :
+  else
+    exit "$?"
+  fi
+
+  if feedback_json=$(jq -n \
+    --argjson threads "${feedback_json}" \
+    --argjson suppressed "${suppressed_feedback_json}" \
+    '$threads + $suppressed'); then
+    :
+  else
+    fail_api 'Failed to combine Copilot feedback.'
+  fi
+
   if feedback_count=$(jq 'length' <<< "${feedback_json}"); then
     :
   else
@@ -92,10 +108,10 @@ main() {
     fail_api 'Failed to parse Copilot review staleness.'
   fi
 
-  if has_generated_no_new_comments_marker=$(jq -r '.hasGeneratedNoNewCommentsMarker' <<< "${state_json}"); then
+  if latest_review_body=$(jq -r '.latestReview.body // empty' <<< "${state_json}"); then
     :
   else
-    fail_api 'Failed to parse latest Copilot review summary.'
+    fail_api 'Failed to parse latest Copilot review body.'
   fi
 
   if (( feedback_count > 0 )); then
@@ -114,12 +130,11 @@ main() {
     exit "${EXIT_NEEDS_REVIEW}"
   fi
 
-  if [[ "${has_generated_no_new_comments_marker}" == 'true' ]]; then
-    exit 0
+  if [[ -n "${latest_review_body}" ]]; then
+    printf '%s' "${latest_review_body}"
   fi
 
-  log 'No unresolved Copilot feedback was found, but the latest Copilot review did not report "generated no new comments".'
-  exit "${EXIT_NEEDS_REVIEW}"
+  exit 0
 }
 
 #######################################
@@ -202,6 +217,7 @@ fetch_copilot_timeline() {
                 state
                 createdAt
                 submittedAt
+                body
                 bodyText
                 url
                 author {
@@ -283,9 +299,12 @@ build_copilot_state() {
             $latestReview != null
             and (($latestReview.commit.oid // "") != $headRefOid)
           ),
-          hasGeneratedNoNewCommentsMarker: (
+          hasSuppressedComments: (
             $latestReview != null
-            and (($latestReview.bodyText // "") | test("generated no comments"; "i") or test("generated no new comments"; "i"))
+            and (
+              ($latestReview.bodyText // "")
+              | test("(^|\\n)Suppressed comments \\([1-9][0-9]*\\)(\\r?\\n|$)"; "i")
+            )
           )
         }
     ' <<< "${timeline_json}"); then
@@ -294,6 +313,34 @@ build_copilot_state() {
   fi
 
   printf '%s' "${state}"
+}
+
+build_suppressed_copilot_feedback() {
+  local state_json="$1"
+  local feedback
+
+  if ! feedback=$(jq '
+    if .hasSuppressedComments then
+      [
+        .latestReview
+        | {
+            kind: "suppressed_review_body",
+            reviewId: .id,
+            url,
+            commitOid: (.commit.oid // null),
+            submittedAt,
+            body: (.body // "")
+          }
+      ]
+    else
+      []
+    end
+  ' <<< "${state_json}"); then
+    log 'Failed to build suppressed Copilot feedback.'
+    return "${EXIT_API_FAILURE}"
+  fi
+
+  printf '%s' "${feedback}"
 }
 
 fetch_review_threads() {
@@ -606,4 +653,6 @@ wait_for_copilot_state() {
   done
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
